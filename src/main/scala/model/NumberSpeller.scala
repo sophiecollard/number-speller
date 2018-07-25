@@ -11,46 +11,43 @@ final case class NumberSpeller(value: Int) {
 
   require(isValid(value), invalidErrorMessage)
 
-  def spell: String = {
-    val words = wordsForRange(value, OrderOfMagnitudeRange.Million) ++
-      wordsForRange(value, OrderOfMagnitudeRange.Thousand) ++
-      wordsForRange(value, OrderOfMagnitudeRange.One)
-
-    words match {
-      case Nil => Zero.name
-      case _   => words.mkString(" ")
+  def spell: Either[Throwable, String] = {
+    for {
+      wordsForMillions <- wordsForRange(value, OrderOfMagnitudeRange.Million)
+      wordsForThousands <- wordsForRange(value, OrderOfMagnitudeRange.Thousand)
+      wordsForOnes <- wordsForRange(value, OrderOfMagnitudeRange.One)
+    } yield {
+      val words = wordsForMillions ++ wordsForThousands ++ wordsForOnes
+      words match {
+        case Nil => Zero.name
+        case _   => words.mkString(" ")
+      }
     }
   }
 
-  private def wordsForRange(n: Int, range: OrderOfMagnitudeRange): List[String] = {
-    val digits = range.extract(n).toString.map(s => Digit.values(s.asDigit)).reverse.toList match {
-      case ones :: Nil                     => (Zero, Zero, ones)
-      case ones :: tens :: Nil             => (Zero, tens, ones)
-      case ones :: tens :: hundreds :: Nil => (hundreds, tens, ones)
-      case _                               => throw new RuntimeException("Impossible state")
-    }
+  private def wordsForRange(n: Int, range: OrderOfMagnitudeRange): Either[Throwable, List[String]] = {
+    for {
+      digits <- range.extractDigits(n)
+    } yield {
+      val leastSignificantDigitsWords: List[String] = (digits._2, digits._3) match {
+        case (Zero, Zero)                    => Nil
+        case (Zero, ones)                    => ones.name :: (range.suffix :?: List.empty[String])
+        case (One, ones)                     => ones.teenName :: (range.suffix :?: List.empty[String])
+        case (Other(_, _, tensPrefix), Zero) => tensPrefix :: (range.suffix :?: List.empty[String])
+        case (Other(_, _, tensPrefix), ones) => tensPrefix :: ones.name :: (range.suffix :?: List.empty[String])
+      }
 
-    val leastSignificantDigitsWords: List[String] = (digits._2, digits._3) match {
-      case (Zero, Zero)                    => Nil
-      case (Zero, ones)                    => ones.name :: (range.suffix :?: List.empty[String])
-      case (One, ones)                     => ones.teenName :: (range.suffix :?: List.empty[String])
-      case (Other(_, _, tensPrefix), Zero) => tensPrefix :: (range.suffix :?: List.empty[String])
-      case (Other(_, _, tensPrefix), ones) => tensPrefix :: ones.name :: (range.suffix :?: List.empty[String])
-    }
+      val mostSignificantDigitWords: List[String] = digits._1 match {
+        case Zero     => Nil
+        case hundreds => hundreds.name :: "hundred" :: Nil
+      }
 
-    val mostSignificantDigitWords: List[String] = digits._1 match {
-      case Zero     => Nil
-      case hundreds => hundreds.name :: "hundred" :: Nil
-    }
-
-    val words: List[String] =
       if (mostSignificantDigitWords.nonEmpty && leastSignificantDigitsWords.nonEmpty) {
         mostSignificantDigitWords ++ List("and") ++ leastSignificantDigitsWords
       } else {
         mostSignificantDigitWords ++ leastSignificantDigitsWords
       }
-
-    words
+    }
   }
 
 }

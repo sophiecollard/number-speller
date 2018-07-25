@@ -11,7 +11,12 @@ object Main {
 
     try {
       val spelledNumber = NumberSpeller(number).spell
-      println(s"$number is spelled '$spelledNumber'")
+      spelledNumber match {
+        case Right(words) =>
+          println(s"$number is spelled '$words'")
+        case Left(e) =>
+          println(e.getMessage)
+      }
     } catch {
       case e: IllegalArgumentException =>
         println(e.getMessage)
